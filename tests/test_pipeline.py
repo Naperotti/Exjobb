@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import types
+import unittest.mock as mock
 
 import numpy as np
 import pytest
@@ -95,6 +96,7 @@ sys.modules.setdefault("sentence_transformers", st_stub)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import config  # noqa: E402
+import pipeline  # noqa: E402
 from generate import generate_sequences, save_sequences  # noqa: E402
 from embed import load_sequences, embed_sequences, save_embeddings  # noqa: E402
 from analyze import (  # noqa: E402
@@ -220,3 +222,109 @@ class TestAnalyze:
         plot_embedding_space(coords, labels, metadata, plot_path, n_clusters=4)
         assert os.path.exists(plot_path)
         assert os.path.getsize(plot_path) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests – pipeline.py CLI (argparse)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_SEED = 42          # matches pipeline.py argparse default
+_DEFAULT_N_CLUSTERS = config.N_CLUSTERS  # matches pipeline.py argparse default
+
+
+class TestPipelineCLI:
+    """Tests for pipeline.py CLI argument parsing via argparse."""
+
+    @pytest.fixture
+    def mocked_stages(self, monkeypatch):
+        """Replace all heavy pipeline stages with lightweight mocks."""
+        gen = mock.MagicMock(return_value=[])
+        save_seq = mock.MagicMock()
+        load_seq = mock.MagicMock(return_value=[])
+        embed_fn = mock.MagicMock(return_value=np.zeros((0, 384), dtype=np.float32))
+        save_emb = mock.MagicMock()
+        analyze_fn = mock.MagicMock(
+            return_value={"coords_2d": None, "labels": None, "summary": []}
+        )
+
+        monkeypatch.setattr(pipeline, "generate_sequences", gen)
+        monkeypatch.setattr(pipeline, "save_sequences", save_seq)
+        monkeypatch.setattr(pipeline, "load_sequences", load_seq)
+        monkeypatch.setattr(pipeline, "embed_sequences", embed_fn)
+        monkeypatch.setattr(pipeline, "save_embeddings", save_emb)
+        monkeypatch.setattr(pipeline, "analyze", analyze_fn)
+
+        return {
+            "generate_sequences": gen,
+            "save_sequences": save_seq,
+            "load_sequences": load_seq,
+            "embed_sequences": embed_fn,
+            "save_embeddings": save_emb,
+            "analyze": analyze_fn,
+        }
+
+    def test_help_exits_cleanly(self, monkeypatch):
+        """--help prints usage and exits with code 0."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py", "--help"])
+        with pytest.raises(SystemExit) as exc_info:
+            pipeline.main()
+        assert exc_info.value.code == 0
+
+    def test_full_run_invokes_all_stages(self, monkeypatch, mocked_stages):
+        """Without skip flags every pipeline stage is called exactly once."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py"])
+        pipeline.main()
+
+        mocked_stages["generate_sequences"].assert_called_once()
+        mocked_stages["save_sequences"].assert_called_once()
+        mocked_stages["load_sequences"].assert_called_once()
+        mocked_stages["embed_sequences"].assert_called_once()
+        mocked_stages["save_embeddings"].assert_called_once()
+        mocked_stages["analyze"].assert_called_once()
+
+    def test_skip_generate_skips_stage_1(self, monkeypatch, mocked_stages):
+        """--skip-generate bypasses generation and sequence saving."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py", "--skip-generate"])
+        pipeline.main()
+
+        mocked_stages["generate_sequences"].assert_not_called()
+        mocked_stages["save_sequences"].assert_not_called()
+        mocked_stages["analyze"].assert_called_once()
+
+    def test_skip_embed_skips_stage_2(self, monkeypatch, mocked_stages):
+        """--skip-embed bypasses loading, embedding, and saving embeddings."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py", "--skip-embed"])
+        pipeline.main()
+
+        mocked_stages["load_sequences"].assert_not_called()
+        mocked_stages["embed_sequences"].assert_not_called()
+        mocked_stages["save_embeddings"].assert_not_called()
+        mocked_stages["analyze"].assert_called_once()
+
+    def test_seed_forwarded_to_generate(self, monkeypatch, mocked_stages):
+        """--seed value is forwarded as a keyword argument to generate_sequences."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py", "--seed", "7"])
+        pipeline.main()
+
+        assert mocked_stages["generate_sequences"].call_args.kwargs["seed"] == 7
+
+    def test_n_clusters_forwarded_to_analyze(self, monkeypatch, mocked_stages):
+        """--n-clusters value is forwarded as a keyword argument to analyze."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py", "--n-clusters", "3"])
+        pipeline.main()
+
+        assert mocked_stages["analyze"].call_args.kwargs["n_clusters"] == 3
+
+    def test_default_seed_is_42(self, monkeypatch, mocked_stages):
+        """Default seed is 42 when --seed is not provided."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py"])
+        pipeline.main()
+
+        assert mocked_stages["generate_sequences"].call_args.kwargs["seed"] == _DEFAULT_SEED
+
+    def test_default_n_clusters_from_config(self, monkeypatch, mocked_stages):
+        """Default n_clusters comes from config.N_CLUSTERS when --n-clusters is omitted."""
+        monkeypatch.setattr("sys.argv", ["pipeline.py"])
+        pipeline.main()
+
+        assert mocked_stages["analyze"].call_args.kwargs["n_clusters"] == _DEFAULT_N_CLUSTERS
