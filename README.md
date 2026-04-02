@@ -67,6 +67,19 @@ python analyze.py --n-clusters 10
 python pipeline.py --skip-generate --skip-embed
 ```
 
+### 4. Ask questions (agent)
+
+```bash
+# Single-shot: print one answer and exit
+python agent.py --question "What is a neural network?"
+
+# Interactive REPL: type questions, get answers, exit with Ctrl+C or 'exit'
+python agent.py
+
+# Override model and generation settings
+python agent.py --model gpt2 --max-new-tokens 150 --temperature 0.8
+```
+
 ---
 
 ## Configuration
@@ -102,6 +115,7 @@ Tests use lightweight stubs — no model downloads required.
 ├── embed.py           # Stage 2 – sentence embedding
 ├── analyze.py         # Stage 3 – dimensionality reduction, clustering, plot
 ├── pipeline.py        # End-to-end runner
+├── agent.py           # Q&A agent (single-shot & interactive)
 ├── requirements.txt
 ├── tests/
 │   └── test_pipeline.py

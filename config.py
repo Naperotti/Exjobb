@@ -67,3 +67,15 @@ SEQUENCES_FILE = f"{OUTPUT_DIR}/sequences.jsonl"
 EMBEDDINGS_FILE = f"{OUTPUT_DIR}/embeddings.npy"
 METADATA_FILE = f"{OUTPUT_DIR}/metadata.jsonl"
 PLOT_FILE = f"{OUTPUT_DIR}/embedding_space.png"
+
+# ---------------------------------------------------------------------------
+# Agent (question-answering) settings
+# ---------------------------------------------------------------------------
+# Maximum number of new tokens the agent generates per answer.
+AGENT_MAX_NEW_TOKENS = 200
+
+# Sampling temperature for the agent (slightly lower → more coherent answers).
+AGENT_TEMPERATURE = 0.7
+
+# Top-p for the agent.
+AGENT_TOP_P = 0.9

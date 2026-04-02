@@ -103,6 +103,7 @@ from analyze import (  # noqa: E402
     build_cluster_summary,
     plot_embedding_space,
 )
+from agent import answer_question  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -220,3 +221,50 @@ class TestAnalyze:
         plot_embedding_space(coords, labels, metadata, plot_path, n_clusters=4)
         assert os.path.exists(plot_path)
         assert os.path.getsize(plot_path) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests – agent
+# ---------------------------------------------------------------------------
+
+class TestAgent:
+    """Tests for the question-answering agent (agent.py)."""
+
+    def _make_tokenizer_model_device(self):
+        """Return the pre-built fake tokenizer/model from the stubs above."""
+        return _FakeTokenizer(), _FakeModel(), "cpu"
+
+    def test_answer_returns_string(self):
+        tokenizer, model, device = self._make_tokenizer_model_device()
+        result = answer_question(
+            "What is machine learning?",
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+        )
+        assert isinstance(result, str)
+
+    def test_answer_non_empty(self):
+        tokenizer, model, device = self._make_tokenizer_model_device()
+        result = answer_question(
+            "Explain neural networks.",
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+        )
+        # The fake tokenizer always decodes to "the quick brown fox".
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_answer_accepts_custom_params(self):
+        tokenizer, model, device = self._make_tokenizer_model_device()
+        result = answer_question(
+            "What is deep learning?",
+            tokenizer=tokenizer,
+            model=model,
+            device=device,
+            max_new_tokens=50,
+            temperature=0.5,
+            top_p=0.8,
+        )
+        assert isinstance(result, str)
